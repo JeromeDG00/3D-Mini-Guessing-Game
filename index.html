@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Number Guessing Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #6e48aa; /* Purple */
+            --secondary-color: #9d50bb; /* Lighter Purple */
+            --accent-color: #ffba08;   /* Yellow Accent */
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+            --success-color: #00ff77; /* Brighter Green for 3D */
+            --warning-high-color: #ff4400; /* Warmer Red/Orange */
+            --warning-low-color: #0077ff;  /* Cooler Blue */
+            --error-color: #dc3545;
+            --font-family: 'Poppins', sans-serif;
+
+            /* Feedback Colors (DOM) */
+            --dom-success-bg: #28a745;
+            --dom-warning-bg: #ffc107;
+            --dom-error-bg: #dc3545;
+            --dom-text-light: white;
+            --dom-text-dark: #343a40;
+        }
+
+        body {
+            font-family: var(--font-family);
+            margin: 0; /* Remove default body margin */
+            overflow: hidden; /* Prevent scrollbars caused by canvas */
+            background-color: #222; /* Fallback background */
+            color: var(--dark-color);
+        }
+
+        /* Three.js Canvas Style */
+        #three-canvas {
+            position: fixed; /* Or absolute, fixed stays during scroll */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0; /* Behind other content */
+            display: block; /* Ensure it's treated as a block */
+        }
+
+        /* Game Container - Appears *above* the canvas */
+        .game-container {
+            position: relative; /* Needed for z-index */
+            z-index: 1;
+            display: flex; /* Use flex to center content vertically and horizontally */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px; /* Padding around the inner box */
+            box-sizing: border-box;
+        }
+
+        .inner-container {
+             /* Semi-transparent background to see 3D behind */
+            background-color: rgba(248, 249, 250, 0.85); /* light-color with alpha */
+            padding: 30px 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+            transition: background-color 0.3s ease;
+        }
+        .inner-container:hover {
+             background-color: rgba(248, 249, 250, 0.95); /* More opaque on hover */
+        }
+
+
+        h1 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-bottom: 25px;
+        }
+
+        h2 {
+            color: var(--secondary-color);
+            font-weight: 600;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        /* Difficulty Selection Styles */
+        .difficulty-selection label {
+            display: block; /* Stack labels vertically */
+            margin: 10px auto; /* Center labels */
+            cursor: pointer;
+            font-size: 0.95em;
+            color: #555;
+            transition: color 0.2s ease;
+            max-width: 300px; /* Limit width for better centering */
+            text-align: left; /* Align text within label */
+            padding-left: 30px; /* Space for radio */
+            position: relative; /* For radio alignment */
+        }
+         .difficulty-selection label:hover {
+            color: var(--primary-color);
+        }
+        .difficulty-selection input[type="radio"] {
+           position: absolute; /* Position radio nicely */
+           left: 0;
+           top: 50%;
+           transform: translateY(-50%);
+           margin-right: 10px;
+           accent-color: var(--primary-color);
+           vertical-align: middle;
+        }
+
+        /* Game Area Styles */
+        .game-area {
+            margin-top: 25px;
+        }
+
+        #instruction {
+            font-size: 1.1em;
+            color: var(--dark-color);
+            margin-bottom: 15px;
+        }
+
+        /* DOM Feedback Styles */
+        #feedback {
+            margin-top: 20px;
+            font-weight: 600;
+            min-height: 1.5em;
+            padding: 8px 12px;
+            border-radius: 5px;
+            display: inline-block;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out, background-color 0.3s ease, color 0.3s ease;
+            font-size: 1.1em;
+        }
+        #feedback.visible { opacity: 1; }
+        #feedback.correct { background-color: var(--dom-success-bg); color: var(--dom-text-light); }
+        #feedback.high, #feedback.low { background-color: var(--dom-warning-bg); color: var(--dom-text-dark); }
+        #feedback.invalid { background-color: var(--dom-error-bg); color: var(--dom-text-light); }
+
+        #guesses-left {
+            color: #666;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        /* Input and Button Styles (Similar to previous) */
+        input[type="number"] {
+            padding: 12px 15px;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            font-size: 1.1em;
+            width: 100px;
+            text-align: center;
+            margin-right: 10px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            font-family: var(--font-family);
+            appearance: textfield; -moz-appearance: textfield;
+        }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"]:focus {
+             border-color: var(--primary-color);
+             box-shadow: 0 0 0 3px rgba(110, 72, 170, 0.25);
+             outline: none;
+        }
+
+        button {
+            padding: 12px 25px;
+            margin-top: 15px;
+            border: none; border-radius: 6px; font-size: 1em;
+            font-weight: 600; letter-spacing: 0.5px;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            color: white; cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+            background: linear-gradient(45deg, #7e58ba, #ad60ca);
+        }
+        button:active:not(:disabled) { transform: translateY(0px); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); }
+        button:disabled {
+            background: #cccccc; cursor: not-allowed; box-shadow: none; transform: none;
+        }
+
+        /* Game Over Styles */
+        .game-over { margin-top: 20px; }
+        .game-over p {
+            font-size: 1.2em; font-weight: 600; margin-bottom: 20px;
+            color: var(--dark-color);
+        }
+        .game-over .win { color: var(--dom-success-bg); } /* DOM Green */
+        .game-over .lose { color: var(--error-color); } /* DOM Red */
+
+        /* Utility Class */
+        .hidden { display: none; }
+
+        /* Animation */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); } 75% { transform: translateX(-5px); }
+        }
+        .shake-input { animation: shake 0.3s ease-in-out; }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="three-canvas"></canvas>
+
+    <div class="game-container">
+        <div class="inner-container">
+            <h1>3D Number Guesser</h1>
+
+            <div id="difficulty-section" class="difficulty-selection">
+                <h2>Choose Difficulty:</h2>
+                <label>
+                    <input type="radio" name="difficulty" value="easy" checked> Easy (1-10, 5 guesses)
+                </label>
+                <label>
+                    <input type="radio" name="difficulty" value="medium"> Medium (1-50, 7 guesses)
+                </label>
+                <label>
+                    <input type="radio" name="difficulty" value="hard"> Hard (1-100, 10 guesses)
+                </label>
+                <button id="start-button">Start Game</button>
+            </div>
+
+            <div id="game-area" class="game-area hidden">
+                <p id="instruction"></p>
+                <div>
+                    <input type="number" id="guess-input" min="1">
+                    <button id="submit-guess">Submit Guess</button>
+                </div>
+                <p id="feedback"></p>
+                <p id="guesses-left"></p>
+            </div>
+
+            <div id="game-over" class="game-over hidden">
+                <p id="game-over-message"></p>
+                <button id="play-again">Play Again</button>
+            </div>
+        </div></div><script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.150.1/build/three.module.js"
+        }
+      }
+    </script>
+
+    <script type="module">
+        // --- Import Three.js ---
+        import * as THREE from 'three';
+
+        // --- DOM Elements (Game Logic) ---
+        const difficultySection = document.getElementById('difficulty-section');
+        const startButton = document.getElementById('start-button');
+        const gameArea = document.getElementById('game-area');
+        const gameOverSection = document.getElementById('game-over');
+        const instruction = document.getElementById('instruction');
+        const guessInput = document.getElementById('guess-input');
+        const submitGuessButton = document.getElementById('submit-guess');
+        const feedback = document.getElementById('feedback');
+        const guessesLeftDisplay = document.getElementById('guesses-left');
+        const gameOverMessage = document.getElementById('game-over-message');
+        const playAgainButton = document.getElementById('play-again');
+
+        // --- Game Variables ---
+        let secretNumber;
+        let minRange;
+        let maxRange;
+        let maxGuesses;
+        let guessesLeft;
+        let difficultyLevels = {
+            easy:   { min: 1, max: 10, guesses: 5 },
+            medium: { min: 1, max: 50, guesses: 7 },
+            hard:   { min: 1, max: 100, guesses: 10 }
+        };
+        let feedbackTimeout;
+
+        // --- Three.js Variables ---
+        let scene, camera, renderer;
+        let crystalMesh; // The main 3D object
+        let crystalMaterial;
+        const clock = new THREE.Clock(); // For animations
+
+        // Default color for the crystal
+        const defaultCrystalColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--secondary-color').trim()); // Get from CSS variable
+
+        // --- Three.js Setup Function ---
+        function initThreeJS() {
+            const canvas = document.getElementById('three-canvas');
+
+            // Scene
+            scene = new THREE.Scene();
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true }); // alpha: true for transparent background
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio); // For sharper rendering on high DPI screens
+            // No need to appendChild, canvas is already in DOM
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Soft white light
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Geometry & Material (Crystal)
+            const geometry = new THREE.IcosahedronGeometry(1.5, 0); // Radius 1.5, detail 0
+            crystalMaterial = new THREE.MeshStandardMaterial({
+                color: defaultCrystalColor,
+                metalness: 0.3,
+                roughness: 0.2,
+                flatShading: false // Set to true for a more faceted look if desired
+            });
+            crystalMesh = new THREE.Mesh(geometry, crystalMaterial);
+            scene.add(crystalMesh);
+
+            // Handle Window Resize
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Start Animation Loop
+            animate();
+        }
+
+        // --- Three.js Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+
+            // Rotate the crystal
+            if (crystalMesh) {
+                 // Base rotation
+                 crystalMesh.rotation.x = Math.sin(elapsedTime * 0.5) * 0.2; // Gentle up/down bob
+                 crystalMesh.rotation.y += 0.005; // Constant slow spin
+
+                 // Add extra rotation speed based on state (optional)
+                 // if (crystalMaterial.userData.state === 'correct') {
+                 //     crystalMesh.rotation.y += 0.05; // Faster spin on win
+                 // }
+            }
+
+            // Render the scene
+            renderer.render(scene, camera);
+        }
+
+        // --- Three.js Window Resize Handler ---
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- Update 3D Object State ---
+        function updateCrystalState(state) {
+             if (!crystalMaterial) return;
+
+             crystalMaterial.userData.state = state; // Store state if needed for animation loop
+
+             let targetColor = new THREE.Color(defaultCrystalColor); // Default
+
+             switch(state) {
+                 case 'low':
+                     targetColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--warning-low-color').trim());
+                     break;
+                 case 'high':
+                      targetColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--warning-high-color').trim());
+                     break;
+                 case 'correct':
+                      targetColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--success-color').trim());
+                     break;
+                 case 'invalid':
+                     // Maybe flash red briefly? Or just revert to default/previous. Let's keep default.
+                     targetColor = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--error-color').trim()); // Flash Red
+                     // Temporarily flash red, then back to default
+                      setTimeout(() => updateCrystalState('default'), 500);
+                     break;
+                 case 'default':
+                 default:
+                     targetColor = new THREE.Color(defaultCrystalColor);
+                     break;
+             }
+
+            // Simple color change - could be animated with GSAP or Tween.js for smoother transitions
+             crystalMaterial.color.set(targetColor);
+        }
+
+
+        // --- Game Logic Functions (Modified for 3D updates) ---
+
+        function getRandomInt(min, max) { /* ... (same as before) ... */
+            min = Math.ceil(min);
+            max = Math.floor(max);
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function showFeedback(message, type) { /* ... (same as before - handles DOM feedback) ... */
+            clearTimeout(feedbackTimeout);
+            feedback.textContent = message;
+            feedback.className = '';
+            feedback.classList.add(type);
+            feedback.classList.add('visible');
+        }
+
+        function triggerInputShake() { /* ... (same as before) ... */
+            guessInput.classList.add('shake-input');
+            setTimeout(() => {
+                guessInput.classList.remove('shake-input');
+            }, 300);
+        }
+
+        function startGame() { /* ... (mostly same + reset crystal) ... */
+            const selectedDifficulty = document.querySelector('input[name="difficulty"]:checked').value;
+            const settings = difficultyLevels[selectedDifficulty];
+
+            minRange = settings.min;
+            maxRange = settings.max;
+            maxGuesses = settings.guesses;
+            guessesLeft = maxGuesses;
+            secretNumber = getRandomInt(minRange, maxRange);
+
+            instruction.textContent = `Guess a number between ${minRange} and ${maxRange}:`;
+            guessInput.min = minRange;
+            guessInput.max = maxRange;
+            guessInput.value = '';
+            guessInput.disabled = false;
+            submitGuessButton.disabled = false;
+            guessesLeftDisplay.textContent = `Guesses left: ${guessesLeft}`;
+            feedback.textContent = '';
+            feedback.className = '';
+
+            difficultySection.classList.add('hidden');
+            gameOverSection.classList.add('hidden');
+            gameArea.classList.remove('hidden');
+
+            updateCrystalState('default'); // Reset crystal color
+
+            guessInput.focus();
+        }
+
+        function checkGuess() { /* ... (mostly same + update crystal state) ... */
+            const playerGuess = parseInt(guessInput.value);
+
+            if (isNaN(playerGuess) || playerGuess < minRange || playerGuess > maxRange) {
+                showFeedback(`Enter a number from ${minRange} to ${maxRange}`, 'invalid');
+                triggerInputShake();
+                updateCrystalState('invalid'); // Flash crystal for invalid input
+                guessInput.value = '';
+                guessInput.focus();
+                return;
+            }
+
+            guessesLeft--;
+            guessesLeftDisplay.textContent = `Guesses left: ${guessesLeft}`;
+
+            if (playerGuess === secretNumber) {
+                showFeedback(`🎉 Correct! The number was ${secretNumber}! 🎉`, 'correct');
+                updateCrystalState('correct'); // Set crystal to success state
+                endGame(true);
+            } else {
+                let feedbackType = '';
+                let feedbackMsg = '';
+                let crystalStateType = '';
+
+                if (playerGuess < secretNumber) {
+                    feedbackType = 'low';
+                    feedbackMsg = 'Too low! Try higher.';
+                    crystalStateType = 'low'; // Update crystal state
+                } else {
+                    feedbackType = 'high';
+                    feedbackMsg = 'Too high! Try lower.';
+                    crystalStateType = 'high'; // Update crystal state
+                }
+
+                updateCrystalState(crystalStateType); // Update crystal color
+
+                if (guessesLeft <= 0) {
+                     showFeedback(`😥 Out of guesses! The number was ${secretNumber}.`, 'invalid');
+                     // Keep crystal color as high/low from last guess, or set specific 'lose' state?
+                     // Let's keep the last high/low color for now.
+                     endGame(false);
+                } else {
+                     showFeedback(feedbackMsg, feedbackType);
+                     guessInput.value = '';
+                     guessInput.focus();
+                }
+            }
+        }
+
+        function endGame(isWin) { /* ... (same as before) ... */
+            guessInput.disabled = true;
+            submitGuessButton.disabled = true;
+
+            gameOverMessage.className = '';
+            if (isWin) {
+                gameOverMessage.textContent = "🏆 Congratulations! You won! 🏆";
+                gameOverMessage.classList.add('win');
+                // Could add a more dramatic crystal animation here
+            } else {
+                gameOverMessage.textContent = `Game Over! The secret number was ${secretNumber}.`;
+                 gameOverMessage.classList.add('lose');
+                 // Maybe make crystal slowly fade or turn grey?
+                 // updateCrystalState('lose'); // Add if desired
+            }
+
+             const delay = isWin ? 1500 : 2000;
+            setTimeout(() => {
+                 gameArea.classList.add('hidden');
+                 gameOverSection.classList.remove('hidden');
+             }, delay);
+        }
+
+        function resetToDifficultySelection() { /* ... (mostly same + reset crystal) ... */
+            gameOverSection.classList.add('hidden');
+            gameArea.classList.add('hidden');
+            difficultySection.classList.remove('hidden');
+
+            feedback.textContent = '';
+            feedback.className = '';
+            updateCrystalState('default'); // Reset crystal color
+        }
+
+        // --- Event Listeners (Game Logic) ---
+        startButton.addEventListener('click', startGame);
+        submitGuessButton.addEventListener('click', checkGuess);
+        playAgainButton.addEventListener('click', resetToDifficultySelection);
+        guessInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter' && !submitGuessButton.disabled) {
+                event.preventDefault();
+                checkGuess();
+            }
+        });
+
+        // --- Initialize Three.js ---
+        initThreeJS();
+
+    </script>
+
+</body>
+</html>
